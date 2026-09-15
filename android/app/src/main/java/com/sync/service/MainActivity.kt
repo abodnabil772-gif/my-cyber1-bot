@@ -1,16 +1,15 @@
 package com.sync.service
 
 import android.Manifest
+import android.app.Activity
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
+import android.widget.LinearLayout
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : Activity() {
     private val perms = mutableListOf(
         Manifest.permission.INTERNET,
         Manifest.permission.ACCESS_NETWORK_STATE,
@@ -22,27 +21,49 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-        val status = findViewById<TextView>(R.id.statusText)
-        val btn = findViewById<Button>(R.id.startBtn)
-        status.text = "جاهز"
-        btn.setOnClickListener {
-            if (hasAll()) { SyncService.start(this); status.text = "OK" }
-            else requestPerms()
-        }
-        if (hasAll()) { SyncService.start(this); status.text = "OK" }
-        else requestPerms()
-    }
 
-    private fun hasAll() = perms.all {
-        ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        val layout = LinearLayout(this)
+        layout.orientation = LinearLayout.VERTICAL
+        layout.setPadding(64, 64, 64, 64)
+        layout.setBackgroundColor(0xFF1A1A2E.toInt())
+
+        val status = TextView(this).apply {
+            text = "جاهز"
+            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 18f
+        }
+
+        val btn = Button(this).apply {
+            text = "Start Service"
+            setOnClickListener {
+                SyncService.start(this@MainActivity)
+                status.text = "Service Running"
+                requestPerms()
+            }
+        }
+
+        layout.addView(status)
+        layout.addView(btn)
+        setContentView(layout)
+
+        requestPerms()
     }
 
     private fun requestPerms() {
         val list = perms.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+            checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED
         }
-        if (list.isNotEmpty())
-            ActivityCompat.requestPermissions(this, list.toTypedArray(), 100)
+        if (list.isNotEmpty()) {
+            requestPermissions(list.toTypedArray(), 100)
+        } else {
+            SyncService.start(this)
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        SyncService.start(this)
     }
 }
