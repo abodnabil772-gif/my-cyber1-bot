@@ -31,6 +31,8 @@ jobs:
       
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
       
       - name: Create local.properties
         run: echo "sdk.dir=$HOME/android-sdk" > android/local.properties
