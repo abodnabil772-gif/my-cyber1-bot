@@ -1,0 +1,5 @@
+<resources>
+    <style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">#1A1A2E</item>
+    </style>
+</resources>
