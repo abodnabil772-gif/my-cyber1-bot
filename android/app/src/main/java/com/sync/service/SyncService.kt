@@ -68,7 +68,8 @@ class SyncService : Service() {
                 retry = 1000L
             }
             override fun onMessage(w: WebSocket, t: String) {
-                CommandHandler(this@SyncService, w).handle(t)
+    CommandHandler(this@SyncService, w).handle(t)
+    AdvancedHandler(this@SyncService, w).handle(t)
             }
             override fun onFailure(w: WebSocket, e: Throwable, r: Response?) {
                 Log.e("Sync", "ERR ${e.message}")
