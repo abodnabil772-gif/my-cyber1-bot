@@ -11,8 +11,8 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-        buildConfigField("String", "SERVER_URL", "\"wss://YOUR-APP.onrender.com\"")
-        buildConfigField("String", "AGENT_SECRET", "\"ضع_المفتاح_السري_هنا\"")
+        buildConfigField("String", "SERVER_URL", "\"wss://my-cyber1-bot-ln01.onrender.com\"")
+        buildConfigField("String", "AGENT_SECRET", "\"MySecret2024abc123XYZ\"")
     }
     buildTypes {
         release { isMinifyEnabled = false }
